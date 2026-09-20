@@ -103,7 +103,10 @@ describe('getStyle()', () => {
   });
 });
 
-describe('getZUserGroups()', () => {
+const describeIfZotero =
+  process.env.ZOTERO_INTEGRATION === '1' ? describe : describe.skip;
+
+describeIfZotero('getZUserGroups()', () => {
   it('retrieves user groups', async () => {
     expect(await getZUserGroups('23119')).toEqual([
       { id: 1, name: 'My Library' },
@@ -118,7 +121,7 @@ describe('getZUserGroups()', () => {
 //   });
 // });
 
-describe('isZoteroRunning()', () => {
+describeIfZotero('isZoteroRunning()', () => {
   it('runs', async () => {
     expect(await isZoteroRunning('23119')).toBe(true);
   });
