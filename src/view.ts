@@ -1,4 +1,4 @@
-import { ItemView, MarkdownView, WorkspaceLeaf, setIcon } from 'obsidian';
+import { ItemView, WorkspaceLeaf, setIcon } from 'obsidian';
 
 import { copyElToClipboard } from './helpers';
 import { t } from './lang/helpers';
@@ -8,7 +8,6 @@ export const viewType = 'ReferenceListView';
 
 export class ReferenceListView extends ItemView {
   plugin: ReferenceList;
-  activeMarkdownLeaf: MarkdownView;
 
   constructor(leaf: WorkspaceLeaf, plugin: ReferenceList) {
     super(leaf);
