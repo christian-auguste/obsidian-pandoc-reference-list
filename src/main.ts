@@ -1,5 +1,4 @@
 import {
-  Events,
   MarkdownView,
   Menu,
   Plugin,
@@ -25,6 +24,7 @@ import {
 import { TooltipManager } from './tooltip';
 import { ReferenceListView, viewType } from './view';
 import { PromiseCapability, fixPath, getVaultRoot } from './helpers';
+import { isReferenceListView } from './viewGuard';
 import path from 'path';
 import { BibManager } from './bib/bibManager';
 import { CiteSuggest } from './citeSuggest/citeSuggest';
@@ -32,7 +32,6 @@ import { isZoteroRunning } from './bib/helpers';
 
 export default class ReferenceList extends Plugin {
   settings: ReferenceListSettings;
-  emitter: Events;
   tooltipManager: TooltipManager;
   cacheDir: string;
   bibManager: BibManager;
@@ -56,7 +55,6 @@ export default class ReferenceList extends Plugin {
     );
 
     this.cacheDir = path.join(getVaultRoot(), '.pandoc');
-    this.emitter = new Events();
     this.bibManager = new BibManager(this);
     this.initPromise.promise
       .then(() => {
@@ -260,10 +258,14 @@ export default class ReferenceList extends Plugin {
     setIcon(this.statusBarIcon, 'lucide-at-sign');
   }
 
-  get view() {
-    const leaves = this.app.workspace.getLeavesOfType(viewType);
-    if (!leaves?.length) return null;
-    return leaves[0].view as ReferenceListView;
+  get view(): ReferenceListView | null {
+    const leaf = this.app.workspace
+      .getLeavesOfType(viewType)
+      .find((candidate) => isReferenceListView(candidate.view));
+
+    return leaf && isReferenceListView(leaf.view)
+      ? (leaf.view as ReferenceListView)
+      : null;
   }
 
   async initLeaf() {
@@ -313,7 +315,7 @@ export default class ReferenceList extends Plugin {
           !!this.settings.hideLinks
         );
 
-        cb && cb();
+        if (cb) cb();
 
         this.processReferences();
       }
@@ -322,10 +324,14 @@ export default class ReferenceList extends Plugin {
     true
   );
 
+  private processGeneration = 0;
+
   processReferences = async () => {
-    const { settings, view } = this;
+    const generation = ++this.processGeneration;
+    const { settings } = this;
+
     if (!settings.pathToBibliography && !settings.pullFromZotero) {
-      return view?.setMessage(
+      return this.view?.setMessage(
         t(
           'Please provide the path to your pandoc compatible bibliography file in the Pandoc Reference List plugin settings.'
         )
@@ -333,31 +339,34 @@ export default class ReferenceList extends Plugin {
     }
 
     const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-    if (activeView) {
-      try {
-        const fileContent = await this.app.vault.cachedRead(activeView.file);
-        const bib = await this.bibManager.getReferenceList(
-          activeView.file,
-          fileContent
-        );
-        const cache = this.bibManager.fileCache.get(activeView.file);
+    if (!activeView?.file) {
+      return this.view?.setNoContentMessage();
+    }
 
-        if (
-          !bib &&
-          cache?.source === this.bibManager &&
-          settings.pullFromZotero &&
-          !(await isZoteroRunning(settings.zoteroPort)) &&
-          this.bibManager.fileCache.get(activeView.file)?.keys.size
-        ) {
-          view?.setMessage(t('Cannot connect to Zotero'));
-        } else {
-          view?.setViewContent(bib);
-        }
-      } catch (e) {
-        console.error(e);
+    try {
+      const fileContent = await this.app.vault.cachedRead(activeView.file);
+      const bib = await this.bibManager.getReferenceList(
+        activeView.file,
+        fileContent
+      );
+
+      if (generation !== this.processGeneration) return;
+
+      const view = this.view;
+      const cache = this.bibManager.fileCache.get(activeView.file);
+      if (
+        !bib &&
+        cache?.source === this.bibManager &&
+        settings.pullFromZotero &&
+        !(await isZoteroRunning(settings.zoteroPort)) &&
+        this.bibManager.fileCache.get(activeView.file)?.keys.size
+      ) {
+        view?.setMessage(t('Cannot connect to Zotero'));
+      } else {
+        view?.setViewContent(bib);
       }
-    } else {
-      view?.setNoContentMessage();
+    } catch (error) {
+      console.error('Failed to process references', error);
     }
   };
 }
