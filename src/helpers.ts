@@ -7,10 +7,33 @@ export function getVaultRoot() {
 }
 
 export function copyElToClipboard(el: HTMLElement) {
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
   require('electron').clipboard.write({
     html: el.outerHTML,
     text: htmlToMarkdown(el.outerHTML),
   });
+}
+
+export function pickDesktopFile(
+  onSelect: (path: string) => void,
+  accept?: string
+) {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = accept ?? '';
+  input.hidden = true;
+
+  const cleanup = () => input.remove();
+  const select = () => {
+    const file = input.files?.[0] as (File & { path?: string }) | undefined;
+    if (file?.path) onSelect(file.path);
+    cleanup();
+  };
+
+  input.addEventListener('change', select, { once: true });
+  input.addEventListener('cancel', cleanup, { once: true });
+  document.body.appendChild(input);
+  input.click();
 }
 
 export class PromiseCapability<T> {

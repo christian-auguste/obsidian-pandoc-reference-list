@@ -2,6 +2,7 @@ import { Notice, PluginSettingTab, Setting, TextComponent } from 'obsidian';
 import which from 'which';
 
 import { t } from './lang/helpers';
+import { pickDesktopFile } from './helpers';
 import ReferenceList from './main';
 import ReactDOM from 'react-dom';
 import React from 'react';
@@ -141,18 +142,13 @@ export class ReferenceListSettingsTab extends PluginSettingTab {
           b.setIcon('folder');
           b.setTooltip(t('Select a bibliography file.'));
           b.onClick(() => {
-            const path = require('electron').remote.dialog.showOpenDialogSync({
-              properties: ['openFile'],
-            });
-
-            if (path && path.length) {
-              input.setValue(path[0]);
-
-              this.plugin.settings.pathToBibliography = path[0];
+            pickDesktopFile((path) => {
+              input.setValue(path);
+              this.plugin.settings.pathToBibliography = path;
               this.plugin.saveSettings(() =>
                 this.plugin.bibManager.reinit(true)
               );
-            }
+            });
           });
         });
       });
@@ -211,18 +207,16 @@ export class ReferenceListSettingsTab extends PluginSettingTab {
           b.setIcon('folder');
           b.setTooltip(t('Select a CSL file located on your computer'));
           b.onClick(() => {
-            const path = require('electron').remote.dialog.showOpenDialogSync({
-              properties: ['openFile'],
-            });
-
-            if (path && path.length) {
-              input.setValue(path[0]);
-
-              this.plugin.settings.cslStylePath = path[0];
-              this.plugin.saveSettings(() =>
-                this.plugin.bibManager.reinit(false)
-              );
-            }
+            pickDesktopFile(
+              (path) => {
+                input.setValue(path);
+                this.plugin.settings.cslStylePath = path;
+                this.plugin.saveSettings(() =>
+                  this.plugin.bibManager.reinit(false)
+                );
+              },
+              '.csl,.xml'
+            );
           });
         });
       });
