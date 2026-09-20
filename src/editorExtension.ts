@@ -1,5 +1,5 @@
+import * as language from '@codemirror/language';
 import { syntaxTree } from '@codemirror/language';
-import { tokenClassNodeProp } from '@codemirror/language';
 import { RangeSetBuilder, StateEffect, StateField } from '@codemirror/state';
 import {
   Decoration,
@@ -9,7 +9,7 @@ import {
   ViewUpdate,
   WidgetType,
 } from '@codemirror/view';
-import { Tree } from '@lezer/common';
+import type { NodeProp, SyntaxNode } from '@lezer/common';
 import {
   Keymap,
   editorInfoField,
@@ -28,6 +28,18 @@ import equal from 'fast-deep-equal';
 import { TooltipManager } from './tooltip';
 
 const ignoreListRegEx = /code|math|templater|hashtag/;
+
+const legacyTokenClassNodeProp = (
+  language as typeof language & { tokenClassNodeProp?: NodeProp<string> }
+).tokenClassNodeProp;
+
+function getNodeClasses(node: SyntaxNode): string {
+  return (
+    (legacyTokenClassNodeProp
+      ? node.type.prop(legacyTokenClassNodeProp)
+      : undefined) ?? node.type.name
+  );
+}
 
 const citeMark = (
   citekey: string,
@@ -181,9 +193,7 @@ export const citeKeyPlugin = ViewPlugin.fromClass(
       const isLivePreview =
         settings.renderCitations && view.state.field(editorLivePreviewField);
 
-      // Don't get the syntax tree until we have to
-      let tree: Tree;
-
+      const tree = syntaxTree(view.state);
       const matched = new Set<RenderedCitation>();
 
       for (const { from, to } of view.visibleRanges) {
@@ -194,7 +204,6 @@ export const citeKeyPlugin = ViewPlugin.fromClass(
         );
 
         for (const match of segments) {
-          if (!tree) tree = syntaxTree(view.state);
           const rendered = citekeyCache?.citations.find(
             (c) =>
               !matched.has(c) &&
@@ -214,15 +223,11 @@ export const citeKeyPlugin = ViewPlugin.fromClass(
               let linkText: string;
 
               const centerNode = tree.resolveInner(center, 0);
+              const centerNodeName = getNodeClasses(centerNode);
 
-              if (
-                centerNode.type
-                  .prop(tokenClassNodeProp)
-                  ?.includes('hmd-internal-link')
-              ) {
+              if (centerNodeName.includes('hmd-internal-link')) {
                 linkText = view.state.sliceDoc(centerNode.from, centerNode.to);
               }
-
               if (
                 view.state.selection.ranges.every((r) => {
                   return (
@@ -250,18 +255,16 @@ export const citeKeyPlugin = ViewPlugin.fromClass(
             const start = from + part.from;
             const end = from + part.to;
 
-            const nodeProps = tree
-              .resolveInner(start, 1)
-              .type.prop(tokenClassNodeProp);
+            const nodeProps = getNodeClasses(tree.resolveInner(start, 1));
 
-            if (nodeProps && ignoreListRegEx.test(nodeProps)) {
+            if (ignoreListRegEx.test(nodeProps)) {
               break;
             }
 
             switch (part.type) {
               case SegmentType.key: {
                 const isUnresolved =
-                  !nodeProps?.includes('link') &&
+                  !nodeProps.includes('link') &&
                   citekeyCache?.unresolvedKeys.has(part.val);
                 const isResolved = citekeyCache?.resolvedKeys.has(part.val);
 
@@ -281,7 +284,7 @@ export const citeKeyPlugin = ViewPlugin.fromClass(
               case SegmentType.at: {
                 const isUnresolved =
                   !!next &&
-                  !nodeProps?.includes('link') &&
+                  !nodeProps.includes('link') &&
                   citekeyCache?.unresolvedKeys.has(next.val);
                 const isResolved =
                   !!next && citekeyCache?.resolvedKeys.has(next.val);
